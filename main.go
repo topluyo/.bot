@@ -91,6 +91,8 @@ func main() {
 			sb.WriteString(strconv.Itoa(group_id))
 			sb.WriteString(`,"channel_id":`)
 			sb.WriteString(strconv.Itoa(channel_id))
+			sb.WriteString(`,"post_id":`)
+			sb.WriteString(strconv.Itoa(post_id))
 			sb.WriteString(`,"user_id":`)
 			sb.WriteString(strconv.Itoa(user_id))
 			sb.WriteString(`}`)
