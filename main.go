@@ -82,7 +82,7 @@ func main() {
 
 		var sb strings.Builder
 		var json_message string
-		if(action=="post/add"){
+		if(action=="post/add" || action=="post/mention"){
 			sb.WriteString(`{"action":"`)
 			sb.WriteString(action)
 			sb.WriteString(`","message":"`)
@@ -222,14 +222,14 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 	userID := Func_User_ID(r, string(message))
 	if ( userID < 1 ) {
     ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-    err := ws.WriteMessage(websocket.TextMessage, []byte("\"TOKEN_PROBLEM\""))
+    err := ws.WriteMessage(websocket.TextMessage, []byte("\"AUTH_PROBLEM\""))
     if err != nil {
         ws.Close()
         return
     }
     ws.WriteControl(
 			websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "\"TOKEN_PROBLEM\""),
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "\"AUTH_PROBLEM\""),
 			time.Now().Add(time.Second),
     )
     ws.Close()
