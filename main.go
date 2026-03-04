@@ -36,6 +36,14 @@ var (
 )
 
 
+var reverseHtmlReplacer = strings.NewReplacer(
+	"&amp;",  "&",
+	"&lt;",  "<",
+	"&gt;",  ">",
+	"&quot;",  `"`,
+	"&#39;",  "'",
+)
+
 
 func main() {
 	var err error
@@ -57,7 +65,7 @@ func main() {
 	defer db.Close()
   
   http.HandleFunc("/!message", func (w http.ResponseWriter, r *http.Request){
-    ip := Func_User_IP_Address(r)
+    ip := strings.Split(r.RemoteAddr,":")[0]
     if(ip!="127.0.0.1"){
       return;
     }
@@ -67,35 +75,84 @@ func main() {
     message    := query.Get("message")
 		group_id   := ToInt(query.Get("group_id"))
 		channel_id := ToInt(query.Get("channel_id"))
+		post_id    := ToInt(query.Get("post_id"))
 		user_id    := ToInt(query.Get("user_id"))
 
 
 
 		var sb strings.Builder
+		var json_message string
+		if(action=="post/add"){
+			sb.WriteString(`{"action":"`)
+			sb.WriteString(action)
+			sb.WriteString(`","message":"`)
+			sb.WriteString(message)
+			sb.WriteString(`","group_id":`)
+			sb.WriteString(strconv.Itoa(group_id))
+			sb.WriteString(`,"channel_id":`)
+			sb.WriteString(strconv.Itoa(channel_id))
+			sb.WriteString(`,"user_id":`)
+			sb.WriteString(strconv.Itoa(user_id))
+			sb.WriteString(`}`)
+			json_message = sb.String()
 
-		sb.WriteString(`{"action":"`)
-		sb.WriteString(action)
-		sb.WriteString(`","message":"`)
-		sb.WriteString(message)
-		sb.WriteString(`","group_id":`)
-		sb.WriteString(strconv.Itoa(group_id))
-		sb.WriteString(`,"channel_id":`)
-		sb.WriteString(strconv.Itoa(channel_id))
-		sb.WriteString(`,"user_id":`)
-		sb.WriteString(strconv.Itoa(user_id))
-		sb.WriteString(`}`)
-
-		json_message := sb.String()
-
-    
-		
-
-
-		bot_ids := BotInGroup(group_id)
-
-		for _,bot_id := range bot_ids {
-			Send(bot_id,json_message)
+			bot_ids := BotInGroup(group_id)
+			for _,bot_id := range bot_ids {
+				Send(bot_id,json_message)
+			}
 		}
+
+		if(action=="message/send"){
+			sb.WriteString(`{"action":"`)
+			sb.WriteString(action)
+			sb.WriteString(`","message":"`)
+			sb.WriteString(message)
+			sb.WriteString(`","user_id":`)
+			sb.WriteString(strconv.Itoa(user_id))
+			sb.WriteString(`}`)
+			json_message = sb.String()
+
+			Send(channel_id,json_message)
+		}
+
+
+
+		if(action=="post/bumote"){
+			sb.WriteString(`{"action":"`)
+			sb.WriteString(action)
+			sb.WriteString(`","message":`)
+			message = reverseHtmlReplacer.Replace(message)
+			sb.WriteString(message)
+			sb.WriteString(`,"post_id":`)
+			sb.WriteString(strconv.Itoa(post_id))
+			sb.WriteString(`,"user_id":`)
+			sb.WriteString(strconv.Itoa(user_id))
+			sb.WriteString(`}`)
+			json_message = sb.String()
+
+			Send(group_id,json_message)
+		}
+
+
+
+		
+		
+		if(action=="group/join" || action=="group/leave" || action=="group/kick" ){
+			sb.WriteString(`{"action":"`)
+			sb.WriteString(action)
+			sb.WriteString(`","group_id":`)
+			sb.WriteString(strconv.Itoa(group_id))
+			sb.WriteString(`,"user_id":`)
+			sb.WriteString(strconv.Itoa(user_id))
+			sb.WriteString(`}`)
+			json_message = sb.String()
+
+			bot_ids := BotInGroup(group_id)
+			for _,bot_id := range bot_ids {
+				Send(bot_id,json_message)
+			}
+		}
+
 		
 
     //!HERE CONTINUE
@@ -161,11 +218,23 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := Func_User_ID(r, string(message))
-	if userID < 1 {
-		ws.Close()
-		return
+	if ( userID < 1 ) {
+    ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
+    err := ws.WriteMessage(websocket.TextMessage, []byte("\"TOKEN_PROBLEM\""))
+    if err != nil {
+        ws.Close()
+        return
+    }
+    ws.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "\"TOKEN_PROBLEM\""),
+			time.Now().Add(time.Second),
+    )
+    ws.Close()
+    return
 	}
 
+	
 	write(userID ," connected")
 
 	client := &Client{
@@ -210,6 +279,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}(client)
+
+
+	Send(userID,"\"CONNECTED\"")
 
 	// READ LOOP (tek reader)
 	for {
